@@ -3,11 +3,10 @@ import pandas as pd
 import numpy as np
 
 # --- CONFIGURAZIONE ---
-st.set_page_config(page_title="Sniper V71 - Multi Target", page_icon="🎯", layout="wide")
-st.title("🎯 Sniper Bet V71 (Gestione Multi-Strategia)")
+st.set_page_config(page_title="Sniper V72 - Stable", page_icon="🎯", layout="wide")
+st.title("🎯 Sniper Bet V72 (Stable Version)")
 st.markdown("""
-Qui puoi configurare **due strategie di caccia** contemporaneamente.
-Il sistema cercherà le partite che soddisfano i criteri della **Strategia 1** O della **Strategia 2**.
+Configura le tue due strategie e trova le partite corrispondenti.
 """)
 st.markdown("---")
 
@@ -55,30 +54,22 @@ def calc_multi_sniper(row, base_hfa, dyn, strat1, strat2):
         
         res['HFA'] = int(curr_hfa)
         
-        # Calcoli Probabilità e EV
+        # Calcoli
         f1, fx, f2 = no_margin(o1, ox, o2)
         ph, pa = get_probs(elo_h, elo_a, curr_hfa)
         rem = 1 - fx
         fin1 = rem * ph
-        fin2 = rem * pa # Probabilità Ospite
+        fin2 = rem * pa 
         
         ev1_perc = ((o1 * fin1) - 1) * 100
         ev2_perc = ((o2 * fin2) - 1) * 100
         
-        # --- VERIFICA STRATEGIA 1 ---
         match_s1 = False
+        # --- STRATEGIA 1 ---
         if strat1['active']:
-            # Verifica Pick
-            target_ev = 0
-            target_odds = 0
-            if strat1['pick'] == '1 (Casa)':
-                target_ev = ev1_perc
-                target_odds = o1
-            elif strat1['pick'] == '2 (Ospite)':
-                target_ev = ev2_perc
-                target_odds = o2
+            target_ev = ev1_perc if strat1['pick'] == '1 (Casa)' else ev2_perc
+            target_odds = o1 if strat1['pick'] == '1 (Casa)' else o2
             
-            # Verifica Range
             if (strat1['min_ev'] <= target_ev <= strat1['max_ev']) and \
                (strat1['min_odd'] <= target_odds <= strat1['max_odd']):
                 res['Signal'] = '✅ STRATEGIA 1'
@@ -88,16 +79,10 @@ def calc_multi_sniper(row, base_hfa, dyn, strat1, strat2):
                 res['Quota'] = target_odds
                 match_s1 = True
 
-        # --- VERIFICA STRATEGIA 2 (Se non ha già matchato la 1 o se vogliamo mostrarle tutte) ---
+        # --- STRATEGIA 2 ---
         if strat2['active'] and not match_s1:
-            target_ev = 0
-            target_odds = 0
-            if strat2['pick'] == '1 (Casa)':
-                target_ev = ev1_perc
-                target_odds = o1
-            elif strat2['pick'] == '2 (Ospite)':
-                target_ev = ev2_perc
-                target_odds = o2
+            target_ev = ev1_perc if strat2['pick'] == '1 (Casa)' else ev2_perc
+            target_odds = o1 if strat2['pick'] == '1 (Casa)' else o2
             
             if (strat2['min_ev'] <= target_ev <= strat2['max_ev']) and \
                (strat2['min_odd'] <= target_odds <= strat2['max_odd']):
@@ -144,26 +129,16 @@ s1_name = st.sidebar.text_input("Nome", "Cluster Ospite Gold", key="n1")
 s1_pick = st.sidebar.selectbox("Punta su", ["1 (Casa)", "2 (Ospite)"], index=1, key="p1")
 s1_min_odd, s1_max_odd = st.sidebar.slider("Range Quota", 1.2, 5.0, (2.06, 2.80), key="o1")
 s1_min_ev, s1_max_ev = st.sidebar.slider("Range EV (%)", -5.0, 30.0, (11.0, 19.5), key="e1")
-
-strat1 = {
-    'active': s1_active, 'name': s1_name, 'pick': s1_pick,
-    'min_odd': s1_min_odd, 'max_odd': s1_max_odd,
-    'min_ev': s1_min_ev, 'max_ev': s1_max_ev
-}
+strat1 = {'active': s1_active, 'name': s1_name, 'pick': s1_pick, 'min_odd': s1_min_odd, 'max_odd': s1_max_odd, 'min_ev': s1_min_ev, 'max_ev': s1_max_ev}
 
 st.sidebar.markdown("---")
 st.sidebar.header("🗡️ STRATEGIA 2 (Secondary)")
-s2_active = st.sidebar.checkbox("Attiva Strategia 2", False)
+s2_active = st.sidebar.checkbox("Attiva Strategia 2", True)
 s2_name = st.sidebar.text_input("Nome", "Nuovo Cluster", key="n2")
 s2_pick = st.sidebar.selectbox("Punta su", ["1 (Casa)", "2 (Ospite)"], index=0, key="p2")
 s2_min_odd, s2_max_odd = st.sidebar.slider("Range Quota", 1.2, 5.0, (1.50, 2.20), key="o2")
 s2_min_ev, s2_max_ev = st.sidebar.slider("Range EV (%)", -5.0, 30.0, (2.0, 10.0), key="e2")
-
-strat2 = {
-    'active': s2_active, 'name': s2_name, 'pick': s2_pick,
-    'min_odd': s2_min_odd, 'max_odd': s2_max_odd,
-    'min_ev': s2_min_ev, 'max_ev': s2_max_ev
-}
+strat2 = {'active': s2_active, 'name': s2_name, 'pick': s2_pick, 'min_odd': s2_min_odd, 'max_odd': s2_max_odd, 'min_ev': s2_min_ev, 'max_ev': s2_max_ev}
 
 # --- MAIN APP ---
 uploaded = st.file_uploader("Carica File Partite Future (CSV)", type=["csv"])
@@ -172,21 +147,18 @@ if uploaded:
     df, err = load_data(uploaded, base_hfa, use_dyn, strat1, strat2)
     
     if df is not None:
-        # Filtra risultati
         targets = df[df['Signal'] != 'SKIP'].copy()
         
         if not targets.empty:
             st.success(f"🎯 TROVATE {len(targets)} OPPORTUNITÀ!")
             
-            # Styling differenziato
             def highlight_strat(val):
-                if 'STRATEGIA 1' in str(val):
-                    return 'background-color: #d4edda; color: #155724; font-weight: bold' # Verde
-                elif 'STRATEGIA 2' in str(val):
-                    return 'background-color: #cce5ff; color: #004085; font-weight: bold' # Blu
+                if 'STRATEGIA 1' in str(val): return 'background-color: #d4edda; color: #155724'
+                elif 'STRATEGIA 2' in str(val): return 'background-color: #cce5ff; color: #004085'
                 return ''
 
-            cols_show = ['Strategia', 'datameci', 'league', 'txtechipa1', 'txtechipa2', 'Pick', 'Quota', 'EV', 'HFA']
+            # FIX: Ho aggiunto 'Signal' alla lista delle colonne da mostrare
+            cols_show = ['Signal', 'Strategia', 'datameci', 'league', 'txtechipa1', 'txtechipa2', 'Pick', 'Quota', 'EV', 'HFA']
             final_cols = [c for c in cols_show if c in targets.columns]
             
             st.dataframe(
@@ -195,15 +167,12 @@ if uploaded:
                 height=600
             )
             
-            # Statistiche veloci
             c1, c2 = st.columns(2)
-            n_s1 = len(targets[targets['Signal'] == '✅ STRATEGIA 1'])
-            n_s2 = len(targets[targets['Signal'] == '🔹 STRATEGIA 2'])
-            c1.metric(f"Totale {s1_name}", n_s1)
-            c2.metric(f"Totale {s2_name}", n_s2)
+            c1.metric(f"Totale {s1_name}", len(targets[targets['Signal'] == '✅ STRATEGIA 1']))
+            c2.metric(f"Totale {s2_name}", len(targets[targets['Signal'] == '🔹 STRATEGIA 2']))
             
         else:
-            st.warning("Nessuna partita soddisfa i criteri delle strategie attive.")
+            st.warning("Nessuna partita soddisfa i criteri.")
             
         with st.expander("Vedi database completo"):
             st.dataframe(df)
