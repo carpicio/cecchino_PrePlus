@@ -3,12 +3,10 @@ import pandas as pd
 import numpy as np
 
 # --- CONFIGURAZIONE ---
-st.set_page_config(page_title="Sniper V73 - Hybrid", page_icon="🧬", layout="wide")
-st.title("🧬 Sniper Bet V73 (Hybrid Backtester)")
+st.set_page_config(page_title="Sniper V74 - High Contrast", page_icon="👓", layout="wide")
+st.title("👓 Sniper Bet V74 (High Contrast)")
 st.markdown("""
-Questa versione è **intelligente**:
-- Se il file ha i risultati, ti calcola il **Profitto Reale** delle strategie.
-- Se il file è di partite future, ti mostra solo i **Segnali Operativi**.
+Versione ottimizzata per la leggibilità: **Colori ad alto contrasto** per vedere subito profitti e perdite.
 """)
 st.markdown("---")
 
@@ -30,7 +28,6 @@ def no_margin(o1, ox, o2):
     except: return 0,0,0
 
 def calc_hybrid(row, base_hfa, dyn, strat1, strat2):
-    # Inizializza output
     res = {
         'Signal': 'SKIP', 'Strategia': '-', 'EV': 0, 'Pick': '-', 
         'HFA': base_hfa, 'PNL': 0, 'Esito': 'Pending'
@@ -73,7 +70,7 @@ def calc_hybrid(row, base_hfa, dyn, strat1, strat2):
         # --- DETERMINA SEGNALE ---
         chosen_strat = None
         target_odds = 0
-        target_pick_code = '' # '1' o '2'
+        target_pick_code = '' 
         
         # Strategia 1
         if strat1['active']:
@@ -107,16 +104,16 @@ def calc_hybrid(row, base_hfa, dyn, strat1, strat2):
                 target_odds = odd
                 target_pick_code = '1' if strat2['pick'] == '1 (Casa)' else '2'
         
-        # --- CALCOLO PROFITTO (Se esistono i risultati) ---
+        # --- CALCOLO PROFITTO ---
         if chosen_strat is not None and row.get('Real_Res') != '-':
             if row['Real_Res'] == target_pick_code:
-                res['PNL'] = target_odds - 1 # Vinto
+                res['PNL'] = target_odds - 1 
                 res['Esito'] = 'WIN'
             else:
-                res['PNL'] = -1 # Perso
+                res['PNL'] = -1 
                 res['Esito'] = 'LOSS'
         elif chosen_strat is not None:
-             res['Esito'] = 'Pending' # Partita Futura
+             res['Esito'] = 'Pending'
 
     except: pass
     return pd.Series(res)
@@ -138,12 +135,10 @@ def load_data(file, hfa, dyn, s1, s2):
         df = df.rename(columns=new)
         df = df.dropna(subset=['cotaa'])
         
-        # Pulizia numeri
         for c in ['scor1', 'scor2']:
             if c in df.columns:
                 df[c] = pd.to_numeric(df[c], errors='coerce')
         
-        # Determina risultato reale
         df['Real_Res'] = '-'
         if 'scor1' in df.columns and 'scor2' in df.columns:
             mask = df['scor1'].notna() & df['scor2'].notna()
@@ -163,7 +158,7 @@ base_hfa = st.sidebar.number_input("HFA Base", 90, step=10)
 use_dyn = st.sidebar.checkbox("Usa HFA Dinamico", True)
 
 st.sidebar.markdown("---")
-st.sidebar.header("🏹 STRATEGIA 1 (Green)")
+st.sidebar.header("🏹 STRATEGIA 1 (Verde Scuro)")
 s1_active = st.sidebar.checkbox("Attiva Strategia 1", True)
 s1_name = st.sidebar.text_input("Nome S1", "Cluster Ospite", key="n1")
 s1_pick = st.sidebar.selectbox("Punta su", ["1 (Casa)", "2 (Ospite)"], index=1, key="p1")
@@ -172,7 +167,7 @@ s1_min_ev, s1_max_ev = st.sidebar.slider("EV S1 (%)", -5.0, 30.0, (11.0, 19.5), 
 strat1 = {'active': s1_active, 'name': s1_name, 'pick': s1_pick, 'min_odd': s1_min_odd, 'max_odd': s1_max_odd, 'min_ev': s1_min_ev, 'max_ev': s1_max_ev}
 
 st.sidebar.markdown("---")
-st.sidebar.header("🗡️ STRATEGIA 2 (Blue)")
+st.sidebar.header("🗡️ STRATEGIA 2 (Blu Scuro)")
 s2_active = st.sidebar.checkbox("Attiva Strategia 2", True)
 s2_name = st.sidebar.text_input("Nome S2", "Cluster Casa", key="n2")
 s2_pick = st.sidebar.selectbox("Punta su", ["1 (Casa)", "2 (Ospite)"], index=0, key="p2")
@@ -181,7 +176,7 @@ s2_min_ev, s2_max_ev = st.sidebar.slider("EV S2 (%)", -5.0, 30.0, (5.0, 15.0), k
 strat2 = {'active': s2_active, 'name': s2_name, 'pick': s2_pick, 'min_odd': s2_min_odd, 'max_odd': s2_max_odd, 'min_ev': s2_min_ev, 'max_ev': s2_max_ev}
 
 # --- MAIN APP ---
-uploaded = st.file_uploader("Carica File (Con o Senza Risultati)", type=["csv"])
+uploaded = st.file_uploader("Carica File CSV", type=["csv"])
 
 if uploaded:
     df, err = load_data(uploaded, base_hfa, use_dyn, strat1, strat2)
@@ -190,46 +185,49 @@ if uploaded:
         targets = df[df['Signal'] != 'SKIP'].copy()
         
         if not targets.empty:
-            # Controllo se ci sono risultati
             has_results = targets[targets['Real_Res'] != '-'].shape[0] > 0
             
             if has_results:
-                # --- MODALITÀ BACKTEST (Risultati Presenti) ---
+                # --- MODALITÀ BACKTEST ---
                 st.success(f"📊 RISULTATI STORICI DISPONIBILI ({len(targets)} partite)")
                 
-                # Calcoli S1
                 t_s1 = targets[targets['Signal'] == '✅ STRATEGIA 1']
                 pnl_s1 = t_s1['PNL'].sum()
-                wins_s1 = len(t_s1[t_s1['Esito'] == 'WIN'])
                 
-                # Calcoli S2
                 t_s2 = targets[targets['Signal'] == '🔹 STRATEGIA 2']
                 pnl_s2 = t_s2['PNL'].sum()
-                wins_s2 = len(t_s2[t_s2['Esito'] == 'WIN'])
                 
-                # Display Metriche
                 k1, k2, k3, k4 = st.columns(4)
                 k1.metric(f"{s1_name} (Bets)", len(t_s1))
                 k2.metric(f"Profitto {s1_name}", f"{pnl_s1:.2f} u", delta="Reale")
                 k3.metric(f"{s2_name} (Bets)", len(t_s2))
                 k4.metric(f"Profitto {s2_name}", f"{pnl_s2:.2f} u", delta="Reale")
                 
-                # Colora righe in base a WIN/LOSS
+                # --- STYLING ALTO CONTRASTO (Backtest) ---
                 def highlight_res(row):
-                    if row['Esito'] == 'WIN': return ['background-color: #d4edda'] * len(row) # Verde Chiaro
-                    if row['Esito'] == 'LOSS': return ['background-color: #f8d7da'] * len(row) # Rosso Chiaro
+                    # VERDE SCURO per le vincite
+                    if row['Esito'] == 'WIN': 
+                        return ['background-color: #d1e7dd; color: #0f5132; font-weight: bold'] * len(row) 
+                    # ROSSO SCURO per le perdite
+                    if row['Esito'] == 'LOSS': 
+                        return ['background-color: #f8d7da; color: #842029; font-weight: bold'] * len(row)
                     return [''] * len(row)
 
                 cols_view = ['Signal', 'txtechipa1', 'txtechipa2', 'Pick', 'Quota', 'Real_Res', 'Esito', 'PNL']
                 st.dataframe(targets[cols_view].style.apply(highlight_res, axis=1), use_container_width=True)
                 
             else:
-                # --- MODALITÀ SNIPER (Partite Future) ---
+                # --- MODALITÀ SNIPER (Future) ---
                 st.info(f"🔮 PREVISIONI FUTURE ({len(targets)} partite selezionate)")
                 
+                # --- STYLING ALTO CONTRASTO (Sniper) ---
                 def highlight_strat(val):
-                    if 'STRATEGIA 1' in str(val): return 'background-color: #d4edda; color: #155724'
-                    elif 'STRATEGIA 2' in str(val): return 'background-color: #cce5ff; color: #004085'
+                    # STRATEGIA 1: Verde Intenso con testo Scuro
+                    if 'STRATEGIA 1' in str(val): 
+                        return 'background-color: #c3e6cb; color: #155724; font-weight: bold'
+                    # STRATEGIA 2: Blu Intenso con testo Scuro
+                    elif 'STRATEGIA 2' in str(val): 
+                        return 'background-color: #b6d4fe; color: #084298; font-weight: bold'
                     return ''
                 
                 cols_view = ['Signal', 'datameci', 'league', 'txtechipa1', 'txtechipa2', 'Pick', 'Quota', 'EV', 'HFA']
