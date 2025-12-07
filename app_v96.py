@@ -4,12 +4,11 @@ import numpy as np
 import io
 
 # --- CONFIGURAZIONE ---
-st.set_page_config(page_title="Sniper V95 - Precision", page_icon="🎯", layout="wide")
-st.title("🎯 Sniper Bet V95 (Precision Control)")
+st.set_page_config(page_title="Sniper V96 - Debugger", page_icon="🕵️‍♂️", layout="wide")
+st.title("🕵️‍♂️ Sniper Bet V96 (Debug Edition)")
 st.markdown("""
-**Nuova Interfaccia:**
-- **Box Manuali:** Inserisci le quote e l'EV con precisione millimetrica.
-- **Memoria:** I parametri partono già impostati sulle strategie vincenti.
+**Non vedi risultati?**
+Attiva la **Modalità Debug** nella barra laterale per vedere se il file viene letto correttamente o se mancano colonne fondamentali (Elo, Classifica).
 """)
 st.markdown("---")
 
@@ -154,6 +153,7 @@ def load_and_prep(file):
             if c in ren: new[c] = ren[c]
         df = df.rename(columns=new)
         
+        # FIX DECIMALI
         cols_num = ['cotaa', 'cotae', 'cotad', 'elohomeo', 'eloawayo', 'scor1', 'scor2']
         for c in cols_num:
             if c in df.columns:
@@ -197,6 +197,7 @@ def to_excel(df):
 
 # --- UI SIDEBAR ---
 st.sidebar.header("⚙️ Configurazione")
+debug_mode = st.sidebar.checkbox("🔧 Modalità Debug (Mostra Tutto)", False)
 base_hfa = st.sidebar.number_input("HFA Base", value=90, step=5)
 use_dyn = st.sidebar.checkbox("Usa HFA Dinamico", value=True)
 
@@ -205,42 +206,26 @@ st.sidebar.header("🏹 STRATEGIA 1 (Verde)")
 s1_active = st.sidebar.checkbox("Attiva S1", True)
 s1_name = st.sidebar.text_input("Nome S1", "Cluster Ospite", key="n1")
 s1_pick = st.sidebar.selectbox("Punta su", ["1 (Casa)", "2 (Ospite)"], index=1, key="p1")
-
-# INPUT NUMERICI AL POSTO DEGLI SLIDER
 c1, c2 = st.sidebar.columns(2)
 s1_min_odd = c1.number_input("Quota Min S1", value=2.20, step=0.05, format="%.2f", key="o1_min")
 s1_max_odd = c2.number_input("Quota Max S1", value=2.80, step=0.05, format="%.2f", key="o1_max")
-
 c3, c4 = st.sidebar.columns(2)
 s1_min_ev = c3.number_input("EV Min S1 (%)", value=10.0, step=0.5, format="%.1f", key="e1_min")
 s1_max_ev = c4.number_input("EV Max S1 (%)", value=30.0, step=0.5, format="%.1f", key="e1_max")
-
-strat1 = {
-    'active': s1_active, 'name': s1_name, 'pick': s1_pick, 
-    'min_odd': s1_min_odd, 'max_odd': s1_max_odd, 
-    'min_ev': s1_min_ev, 'max_ev': s1_max_ev
-}
+strat1 = {'active': s1_active, 'name': s1_name, 'pick': s1_pick, 'min_odd': s1_min_odd, 'max_odd': s1_max_odd, 'min_ev': s1_min_ev, 'max_ev': s1_max_ev}
 
 st.sidebar.markdown("---")
 st.sidebar.header("🗡️ STRATEGIA 2 (Blu)")
 s2_active = st.sidebar.checkbox("Attiva S2", True)
 s2_name = st.sidebar.text_input("Nome S2", "Cluster Casa", key="n2")
 s2_pick = st.sidebar.selectbox("Punta su", ["1 (Casa)", "2 (Ospite)"], index=1, key="p2")
-
-# INPUT NUMERICI S2
 c5, c6 = st.sidebar.columns(2)
 s2_min_odd = c5.number_input("Quota Min S2", value=2.50, step=0.05, format="%.2f", key="o2_min")
 s2_max_odd = c6.number_input("Quota Max S2", value=2.80, step=0.05, format="%.2f", key="o2_max")
-
 c7, c8 = st.sidebar.columns(2)
 s2_min_ev = c7.number_input("EV Min S2 (%)", value=12.0, step=0.5, format="%.1f", key="e2_min")
 s2_max_ev = c8.number_input("EV Max S2 (%)", value=30.0, step=0.5, format="%.1f", key="e2_max")
-
-strat2 = {
-    'active': s2_active, 'name': s2_name, 'pick': s2_pick, 
-    'min_odd': s2_min_odd, 'max_odd': s2_max_odd, 
-    'min_ev': s2_min_ev, 'max_ev': s2_max_ev
-}
+strat2 = {'active': s2_active, 'name': s2_name, 'pick': s2_pick, 'min_odd': s2_min_odd, 'max_odd': s2_max_odd, 'min_ev': s2_min_ev, 'max_ev': s2_max_ev}
 
 st.sidebar.markdown("---")
 st.sidebar.header("📥 DOWNLOAD")
@@ -253,14 +238,12 @@ tab1, tab2 = st.tabs(["🧪 STUDIO STORICO", "⚖️ VERIFICA (Pre/Post)"])
 with tab1:
     st.info("Carica UN SOLO FILE (Quote + Risultati).")
     file_studio = st.file_uploader("File Storico", type=["csv", "xlsx", "xls"], key="u1")
-    
     if file_studio:
         df_stud, err = load_and_prep(file_studio)
         if df_stud is not None:
             calc_s = df_stud.apply(lambda r: calc_hybrid(r, base_hfa, use_dyn, strat1, strat2), axis=1)
             final_s = pd.concat([df_stud, calc_s], axis=1)
             targets_s = final_s[final_s['Signal'] != 'SKIP']
-            
             if not targets_s.empty:
                 if 'Real_Res' in targets_s.columns and targets_s['Real_Res'].ne('-').any():
                     def check_res(row):
@@ -281,10 +264,8 @@ with tab1:
                     c1.metric("1 (%)", f"{res_counts.get('1', 0):.1f}%")
                     c2.metric("X (%)", f"{res_counts.get('X', 0):.1f}%")
                     c3.metric("2 (%)", f"{res_counts.get('2', 0):.1f}%")
-                    
                     st.markdown("---")
                     
-                    # FILTRO INDIPENDENTE
                     c_s1 = targets_s[targets_s['Is_S1'] == True]
                     c_s2 = targets_s[targets_s['Is_S2'] == True]
                     
@@ -308,7 +289,6 @@ with tab1:
                     cols = ['Signal', 'txtechipa1', 'txtechipa2', 'Pick', 'Quota', 'Real_Res', 'Esito', 'Dettaglio', 'PNL']
                     final_c = [c for c in cols if c in targets_s.columns]
                     st.dataframe(targets_s[final_c].style.apply(color_rows, axis=1), use_container_width=True)
-                    
                     d_data = to_excel(targets_s[final_c])
                     dl_placeholder.download_button("💾 SCARICA STORICO", d_data, "sniper_storico.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
                 else:
@@ -324,6 +304,15 @@ with tab2:
     if f_pre:
         df_pre, err1 = load_and_prep(f_pre)
         if df_pre is not None:
+            # DEBUG MODE
+            if debug_mode:
+                st.warning("🛠️ MODALITÀ DEBUG ATTIVA: Ecco tutte le righe lette (prima dei filtri)")
+                st.write(f"Righe lette: {len(df_pre)}")
+                st.write("Colonne Rilevate:", list(df_pre.columns))
+                st.dataframe(df_pre.head())
+                if 'elohomeo' not in df_pre.columns: st.error("❌ Manca colonna ELO HOME")
+                if 'rank_h_home' not in df_pre.columns: st.error("❌ Manca colonna RANK/PLACE HOME")
+
             calc_pre = df_pre.apply(lambda r: calc_hybrid(r, base_hfa, use_dyn, strat1, strat2), axis=1)
             final_pre = pd.concat([df_pre, calc_pre], axis=1)
             targets_pre = final_pre[final_pre['Signal'] != 'SKIP'].copy()
@@ -339,14 +328,12 @@ with tab2:
                     if '✅ S1 + 🔹 S2' in str(val): return 'background-color: #fff3cd; color: #856404; font-weight: bold'
                     return ''
                 st.dataframe(targets_pre[final_cols_pre].style.applymap(color_strat, subset=['Signal']), use_container_width=True)
-                
                 d_data = to_excel(targets_pre[final_cols_pre])
                 dl_placeholder.download_button("💾 SCARICA LISTA PRE-MATCH", d_data, "sniper_prematch.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
                 
                 st.divider()
                 st.markdown("### 2. FASE POST-MATCH")
                 f_post = st.file_uploader("File RISULTATI", type=["csv", "xlsx", "xls"], key="u2b")
-                
                 if f_post:
                     df_post, err2 = load_and_prep(f_post)
                     if df_post is not None:
@@ -365,29 +352,23 @@ with tab2:
                                 elif row['Pick_Code'] == '1': row['Dettaglio'] = '❌ Vittoria Ospite (2)'
                                 elif row['Pick_Code'] == '2': row['Dettaglio'] = '❌ Vittoria Casa (1)'
                             return row
-                        
                         found_res = targets_pre.apply(check_outcome, axis=1)
                         found_res = found_res[found_res['Esito'] != 'Non Trovata']
-                        
                         if not found_res.empty:
                             st.metric("Profitto Reale", f"{found_res['PNL'].sum():.2f} u")
-                            
                             def color_res(row):
                                 if row['Esito'] == 'WIN': return ['background-color: #28a745; color: white; font-weight: bold'] * len(row)
                                 if row['Esito'] == 'LOSS': return ['background-color: #dc3545; color: white; font-weight: bold'] * len(row)
                                 return ['color: black'] * len(row)
-                            
                             cols_post = ['Signal', 'txtechipa1', 'txtechipa2', 'Pick', 'Quota', 'Real_Res', 'Esito', 'Dettaglio', 'PNL']
                             final_cols_post = [c for c in cols_post if c in found_res.columns]
                             st.dataframe(found_res[final_cols_post].style.apply(color_res, axis=1), use_container_width=True)
-                            
                             losses = found_res[found_res['Esito'] == 'LOSS']
                             if not losses.empty:
                                 draws = len(losses[losses['Real_Res'] == 'X'])
                                 cA, cB = st.columns(2)
                                 cA.error(f"Pareggi (X): {draws}")
                                 cB.error(f"Sconfitte Nette: {len(losses)-draws}")
-                            
                             d_data2 = to_excel(found_res[final_cols_post])
                             dl_placeholder.download_button("💾 SCARICA REPORT VERIFICA", d_data2, "sniper_verifica.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
                         else: st.warning("Nessuna corrispondenza trovata.")
