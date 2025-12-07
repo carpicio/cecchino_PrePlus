@@ -14,13 +14,12 @@ except ImportError:
     except: pass
 
 # --- CONFIGURAZIONE ---
-st.set_page_config(page_title="Sniper V87 - Analytics", page_icon="📊", layout="wide")
-st.title("📊 Sniper Bet V87 (Analytics & High Contrast)")
+st.set_page_config(page_title="Sniper V88 - Final Fix", page_icon="🎯", layout="wide")
+st.title("🎯 Sniper Bet V88 (Stable)")
 st.markdown("""
-**Novità:**
-- **Analisi 1X2:** Distribuzione percentuale dei segni reali sulle partite filtrate.
-- **ROI & Utile:** Calcolo dettagliato per capire quale strategia rende di più.
-- **Alto Contrasto:** Tabella risultati ottimizzata per la lettura.
+**Modalità Step-by-Step:**
+1. Carica il PRE-MATCH per vedere i pronostici.
+2. Carica i RISULTATI per vedere com'è andata (con dettaglio sconfitte).
 """)
 st.markdown("---")
 
@@ -126,8 +125,10 @@ def load_and_prep(file):
                 file.seek(0)
                 df = pd.read_csv(file, sep=';', encoding='latin1', on_bad_lines='skip', engine='python')
         elif filename.endswith(('.xls', '.xlsx')):
-            try: df = pd.read_excel(file)
-            except Exception as e: return None, f"Errore Excel: {e}"
+            try:
+                df = pd.read_excel(file)
+            except Exception as e:
+                return None, f"Errore Excel: {e}"
         
         if df is None: return None, "Formato non valido"
 
@@ -373,8 +374,8 @@ with tab2:
                                 row['PNL'] = -1
                                 row['Esito'] = 'LOSS'
                                 if real == 'X': row['Dettaglio'] = '❌ Pareggio (X)'
-                                elif row['Pick_Code'] == '1': row['Dettaglio'] = '❌ Vittoria Ospite (2)' 
-                                elif row['Pick_Code'] == '2': row['Dettaglio'] = '❌ Vittoria Casa (1)'
+                                elif row['Pick_Code'] == '1': row['Dettaglio'] = '❌ Vittoria Avversario' 
+                                elif row['Pick_Code'] == '2': row['Dettaglio'] = '❌ Vittoria Avversario'
                             return row
                         
                         results_df = targets_pre.apply(check_outcome, axis=1)
@@ -385,13 +386,13 @@ with tab2:
                             pnl_tot = found_res['PNL'].sum()
                             st.metric("Profitto Reale", f"{pnl_tot:.2f} u", delta="Netto")
                             
-                            # HIGH CONTRAST STYLE
                             def color_res(row):
                                 if row['Esito'] == 'WIN': return ['background-color: #28a745; color: white; font-weight: bold'] * len(row)
                                 if row['Esito'] == 'LOSS': return ['background-color: #dc3545; color: white; font-weight: bold'] * len(row)
                                 return ['color: black'] * len(row)
                             
-                            cols_post = ['Signal', 'txtechipa1', 'txtechipa2', 'Pick', 'Quota', 'Real_Res', 'Dettaglio', 'PNL']
+                            # FIX DEFINITIVO: INCLUDO 'Esito' NELLA LISTA COLONNE
+                            cols_post = ['Signal', 'txtechipa1', 'txtechipa2', 'Pick', 'Quota', 'Real_Res', 'Esito', 'Dettaglio', 'PNL']
                             final_cols_post = [c for c in cols_post if c in found_res.columns]
                             
                             st.dataframe(found_res[final_cols_post].style.apply(color_res, axis=1), use_container_width=True)
