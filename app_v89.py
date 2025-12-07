@@ -15,12 +15,11 @@ except ImportError:
     except: pass
 
 # --- CONFIGURAZIONE ---
-st.set_page_config(page_title="Sniper V88 - Export", page_icon="💾", layout="wide")
-st.title("💾 Sniper Bet V88 (Export Edition)")
+st.set_page_config(page_title="Sniper V89 - Side Download", page_icon="💾", layout="wide")
+st.title("💾 Sniper Bet V89 (Side Download)")
 st.markdown("""
-**Versione Completa:**
-- Analisi Storica e Verifica Step-by-Step.
-- **Export Excel:** Scarica i risultati filtrati e verificati con un click.
+**Pulsanti Download spostati a Sinistra!**
+Guarda nella barra laterale dopo aver caricato i file per scaricare l'Excel.
 """)
 st.markdown("---")
 
@@ -173,7 +172,7 @@ def load_and_prep(file):
         for c in ['scor1', 'scor2']:
             if c in df.columns: df[c] = pd.to_numeric(df[c], errors='coerce')
             
-        # Match ID Normalizzato
+        # Match ID
         if 'txtechipa1' in df.columns and 'txtechipa2' in df.columns:
             df['MatchID'] = df['txtechipa1'].astype(str).str.lower().str.replace(' ', '') + "-" + \
                             df['txtechipa2'].astype(str).str.lower().str.replace(' ', '')
@@ -189,13 +188,12 @@ def load_and_prep(file):
         return df, None
     except Exception as e: return None, str(e)
 
-# --- EXPORT EXCEL FUNCTION ---
+# --- EXPORT EXCEL ---
 def to_excel(df):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df.to_excel(writer, index=False, sheet_name='Sniper_Data')
-    processed_data = output.getvalue()
-    return processed_data
+        df.to_excel(writer, index=False, sheet_name='Sniper_Output')
+    return output.getvalue()
 
 # --- UI SIDEBAR ---
 st.sidebar.header("⚙️ Configurazione")
@@ -220,6 +218,10 @@ s2_min_odd, s2_max_odd = st.sidebar.slider("Quote S2", 1.2, 5.0, (1.80, 2.20), k
 s2_min_ev, s2_max_ev = st.sidebar.slider("EV S2 (%)", -5.0, 30.0, (5.0, 15.0), key="e2")
 strat2 = {'active': s2_active, 'name': s2_name, 'pick': s2_pick, 'min_odd': s2_min_odd, 'max_odd': s2_max_odd, 'min_ev': s2_min_ev, 'max_ev': s2_max_ev}
 
+st.sidebar.markdown("---")
+st.sidebar.header("📥 DOWNLOAD CENTER")
+download_placeholder = st.sidebar.empty() # Placeholder per i pulsanti
+
 # --- TABS ---
 tab1, tab2 = st.tabs(["🧪 STUDIO STORICO", "⚖️ VERIFICA (Pre/Post)"])
 
@@ -236,7 +238,6 @@ with tab1:
             targets_s = final_s[final_s['Signal'] != 'SKIP']
             
             if not targets_s.empty:
-                # Applica esito se c'è risultato
                 if 'Real_Res' in targets_s.columns and targets_s['Real_Res'].ne('-').any():
                     def check_res(row):
                         if row['Real_Res'] == '-': return row
@@ -254,9 +255,8 @@ with tab1:
                     
                     targets_s = targets_s.apply(check_res, axis=1)
                     
-                    # --- ANALYTICS 1X2 ---
+                    # --- ANALYTICS ---
                     st.subheader("📊 Analisi Performance")
-                    
                     res_counts = targets_s['Real_Res'].value_counts(normalize=True) * 100
                     c1, c2, c3 = st.columns(3)
                     c1.metric("Segno 1 Uscito", f"{res_counts.get('1', 0):.1f}%")
@@ -265,41 +265,7 @@ with tab1:
                     
                     st.markdown("---")
                     
-                    c_s1 = targets_s[targets_s['Signal'] == '✅ STRATEGIA 1']
-                    c_s2 = targets_s[targets_s['Signal'] == '🔹 STRATEGIA 2']
-                    
-                    colA, colB = st.columns(2)
-                    with colA:
-                        st.info(f"**{s1_name}** ({len(c_s1)} bets)")
-                        if not c_s1.empty:
-                            pnl1 = c_s1['PNL'].sum()
-                            roi1 = (pnl1 / len(c_s1)) * 100
-                            st.write(f"Utile: **{pnl1:.2f} u**")
-                            st.write(f"ROI: **{roi1:.2f}%**")
-                    with colB:
-                        st.info(f"**{s2_name}** ({len(c_s2)} bets)")
-                        if not c_s2.empty:
-                            pnl2 = c_s2['PNL'].sum()
-                            roi2 = (pnl2 / len(c_s2)) * 100
-                            st.write(f"Utile: **{pnl2:.2f} u**")
-                            st.write(f"ROI: **{roi2:.2f}%**")
-                    
-                    best_profit = -9999
-                    best_strat = "Nessuna"
-                    if not c_s1.empty and c_s1['PNL'].sum() > best_profit:
-                        best_profit = c_s1['PNL'].sum()
-                        best_strat = s1_name
-                    if not c_s2.empty and c_s2['PNL'].sum() > best_profit:
-                        best_profit = c_s2['PNL'].sum()
-                        best_strat = s2_name
-                        
-                    if best_profit > 0:
-                        st.success(f"🏆 La strategia migliore è **{best_strat}** con un utile di **{best_profit:.2f} u**")
-                    else:
-                        st.error("⚠️ Nessuna strategia è in profitto.")
-
-                    st.markdown("---")
-                    
+                    # --- TABLE ---
                     def color_rows(row):
                         if row['Esito'] == 'WIN': return ['background-color: #28a745; color: white; font-weight: bold'] * len(row)
                         if row['Esito'] == 'LOSS': return ['background-color: #dc3545; color: white; font-weight: bold'] * len(row)
@@ -309,13 +275,28 @@ with tab1:
                     final_c = [c for c in cols if c in targets_s.columns]
                     st.dataframe(targets_s[final_c].style.apply(color_rows, axis=1), use_container_width=True)
                     
-                    # EXPORT
+                    # --- SIDEBAR DOWNLOAD ---
                     excel_data = to_excel(targets_s[final_c])
-                    st.download_button(label="💾 Scarica Excel Storico", data=excel_data, file_name="sniper_storico.xlsx")
+                    download_placeholder.download_button(
+                        label="💾 SCARICA ANALISI STORICO",
+                        data=excel_data,
+                        file_name="sniper_storico.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    )
                     
                 else:
-                    st.info("Solo previsioni (senza risultati).")
+                    st.info("Solo previsioni.")
                     st.dataframe(targets_s)
+                    # Download anche se solo previsioni
+                    cols = ['Signal', 'txtechipa1', 'txtechipa2', 'Pick', 'Quota', 'EV', 'HFA']
+                    final_c = [c for c in cols if c in targets_s.columns]
+                    excel_data = to_excel(targets_s[final_c])
+                    download_placeholder.download_button(
+                        label="💾 SCARICA PREVISIONI",
+                        data=excel_data,
+                        file_name="sniper_previsioni.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    )
         else:
             st.error(err)
 
@@ -344,9 +325,14 @@ with tab2:
                     
                 st.dataframe(targets_pre[final_cols_pre].style.applymap(color_strat, subset=['Signal']), use_container_width=True)
                 
-                # EXPORT PRE
+                # DOWNLOAD PRE-MATCH (SIDEBAR)
                 excel_pre = to_excel(targets_pre[final_cols_pre])
-                st.download_button(label="💾 Scarica Excel Pre-Match", data=excel_pre, file_name="sniper_prematch.xlsx")
+                download_placeholder.download_button(
+                    label="💾 SCARICA LISTA PRE-MATCH",
+                    data=excel_pre,
+                    file_name="sniper_prematch.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
                 
                 st.divider()
                 st.markdown("### 2. FASE POST-MATCH")
@@ -374,8 +360,8 @@ with tab2:
                                 row['PNL'] = -1
                                 row['Esito'] = 'LOSS'
                                 if real == 'X': row['Dettaglio'] = '❌ Pareggio (X)'
-                                elif row['Pick_Code'] == '1': row['Dettaglio'] = '❌ Vittoria Ospite (2)' 
-                                elif row['Pick_Code'] == '2': row['Dettaglio'] = '❌ Vittoria Casa (1)'
+                                elif row['Pick_Code'] == '1': row['Dettaglio'] = '❌ Vittoria Avversario' 
+                                elif row['Pick_Code'] == '2': row['Dettaglio'] = '❌ Vittoria Avversario'
                             return row
                         
                         results_df = targets_pre.apply(check_outcome, axis=1)
@@ -396,7 +382,7 @@ with tab2:
                             
                             st.dataframe(found_res[final_cols_post].style.apply(color_res, axis=1), use_container_width=True)
                             
-                            # LOSS BREAKDOWN TAB 2
+                            # ANALISI SCONFITTE
                             st.markdown("#### 📉 Analisi Sconfitte")
                             losses = found_res[found_res['Esito'] == 'LOSS']
                             if not losses.empty:
@@ -406,11 +392,16 @@ with tab2:
                                 cA.error(f"Pareggi (X): **{draws}**")
                                 cB.error(f"Vittorie Avversario: **{opp_wins}**")
                             
-                            # EXPORT POST
+                            # DOWNLOAD VERIFICA (SIDEBAR - SOVRASCRIVE IL PRECEDENTE)
                             excel_post = to_excel(found_res[final_cols_post])
-                            st.download_button(label="💾 Scarica Excel Verifica", data=excel_post, file_name="sniper_verifica.xlsx")
+                            download_placeholder.download_button(
+                                label="💾 SCARICA REPORT VERIFICA",
+                                data=excel_post,
+                                file_name="sniper_verifica_completa.xlsx",
+                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                            )
                                 
                         else:
-                            st.warning("Nessuna corrispondenza trovata tra i due file.")
+                            st.warning("Nessuna corrispondenza trovata.")
         else:
             st.error(err1)
