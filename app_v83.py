@@ -14,12 +14,10 @@ except ImportError:
     except: pass
 
 # --- CONFIGURAZIONE ---
-st.set_page_config(page_title="Sniper V83 - Step by Step", page_icon="👣", layout="wide")
-st.title("👣 Sniper Bet V83 (Verifica Step-by-Step)")
+st.set_page_config(page_title="Sniper V84 - Anti Crash", page_icon="🛡️", layout="wide")
+st.title("🛡️ Sniper Bet V84 (Stable Version)")
 st.markdown("""
-**Flusso di Lavoro nel Tab 2:**
-1.  Carica il file **PRE-MATCH** -> Vedi subito le **Partite Selezionate** (Cosa giocare).
-2.  Carica il file **RISULTATI** -> Vedi l'**Esito Dettagliato** (Vinta, Pareggiata o Persa contro Avversario).
+**Modalità sicura:** Se nel tuo file mancano colonne come 'Data' o 'Lega', il software funziona lo stesso senza bloccarsi.
 """)
 st.markdown("---")
 
@@ -125,7 +123,10 @@ def load_and_prep(file):
                 file.seek(0)
                 df = pd.read_csv(file, sep=';', encoding='latin1', on_bad_lines='skip', engine='python')
         elif filename.endswith(('.xls', '.xlsx')):
-            df = pd.read_excel(file)
+            try:
+                df = pd.read_excel(file)
+            except Exception as e:
+                return None, f"Errore Excel: {e}. Prova a salvare come CSV."
         
         if df is None: return None, "Formato non valido"
 
@@ -153,7 +154,9 @@ def load_and_prep(file):
             if c.lower() in ren: new[c] = ren[c.lower()]
         df = df.rename(columns=new)
         
-        if 'cotaa' not in df.columns: return None, f"Colonne quote mancanti. Trovate: {list(df.columns)}"
+        # DEBUG COLONNE
+        if 'cotaa' not in df.columns: 
+            return None, f"⚠️ ERRORE: Non trovo le quote (1, X, 2). Ecco le colonne che vedo nel tuo file: {list(df.columns)}"
         
         df = df.dropna(subset=['cotaa'])
 
@@ -198,135 +201,4 @@ s1_active = st.sidebar.checkbox("Attiva S1", True)
 s1_name = st.sidebar.text_input("Nome S1", "Cluster Ospite", key="n1")
 s1_pick = st.sidebar.selectbox("Punta su", ["1 (Casa)", "2 (Ospite)"], index=1, key="p1")
 s1_min_odd, s1_max_odd = st.sidebar.slider("Quote S1", 1.2, 5.0, (2.06, 2.80), key="o1")
-s1_min_ev, s1_max_ev = st.sidebar.slider("EV S1 (%)", -5.0, 30.0, (11.0, 19.5), key="e1")
-strat1 = {'active': s1_active, 'name': s1_name, 'pick': s1_pick, 'min_odd': s1_min_odd, 'max_odd': s1_max_odd, 'min_ev': s1_min_ev, 'max_ev': s1_max_ev}
-
-st.sidebar.markdown("---")
-st.sidebar.header("🗡️ STRATEGIA 2 (Blu)")
-s2_active = st.sidebar.checkbox("Attiva S2", True)
-s2_name = st.sidebar.text_input("Nome S2", "Cluster Casa", key="n2")
-s2_pick = st.sidebar.selectbox("Punta su", ["1 (Casa)", "2 (Ospite)"], index=0, key="p2")
-s2_min_odd, s2_max_odd = st.sidebar.slider("Quote S2", 1.2, 5.0, (1.80, 2.20), key="o2")
-s2_min_ev, s2_max_ev = st.sidebar.slider("EV S2 (%)", -5.0, 30.0, (5.0, 15.0), key="e2")
-strat2 = {'active': s2_active, 'name': s2_name, 'pick': s2_pick, 'min_odd': s2_min_odd, 'max_odd': s2_max_odd, 'min_ev': s2_min_ev, 'max_ev': s2_max_ev}
-
-# --- TABS ---
-tab1, tab2 = st.tabs(["🧪 STUDIO STORICO (Single File)", "⚖️ VERIFICA (Step-by-Step)"])
-
-# --- TAB 1: STUDIO ---
-with tab1:
-    st.info("Carica UN file completo (Quote + Risultati) per studiare la strategia.")
-    file_studio = st.file_uploader("Carica File Storico", type=["csv", "xlsx", "xls"], key="u1")
-    
-    if file_studio:
-        df_stud, err = load_and_prep(file_studio)
-        if df_stud is not None:
-            calc_s = df_stud.apply(lambda r: calc_hybrid(r, base_hfa, use_dyn, strat1, strat2), axis=1)
-            final_s = pd.concat([df_stud, calc_s], axis=1)
-            targets_s = final_s[final_s['Signal'] != 'SKIP']
-            
-            # Calcolo PNL se risultati presenti
-            if not targets_s.empty:
-                # Applica esito
-                def check_res(row):
-                    if row['Real_Res'] == '-': return row
-                    if row['Real_Res'] == row['Pick_Code']:
-                        row['PNL'] = row['Quota'] - 1
-                        row['Esito'] = 'WIN'
-                        row['Dettaglio'] = 'Vinta'
-                    else:
-                        row['PNL'] = -1
-                        row['Esito'] = 'LOSS'
-                        if row['Real_Res'] == 'X': row['Dettaglio'] = 'Pareggio (X)'
-                        elif row['Pick_Code'] == '1': row['Dettaglio'] = 'Vittoria Ospite (2)'
-                        elif row['Pick_Code'] == '2': row['Dettaglio'] = 'Vittoria Casa (1)'
-                    return row
-                
-                targets_s = targets_s.apply(check_res, axis=1)
-                
-                st.metric("Profitto Totale", f"{targets_s['PNL'].sum():.2f} u")
-                
-                cols = ['Signal', 'txtechipa1', 'txtechipa2', 'Pick', 'Quota', 'Real_Res', 'Esito', 'Dettaglio', 'PNL']
-                st.dataframe(targets_s[cols], use_container_width=True)
-
-# --- TAB 2: VERIFICA ---
-with tab2:
-    st.markdown("### 1. FASE PRE-MATCH: Cosa giochiamo?")
-    f_pre = st.file_uploader("Carica File QUOTE (Prematch)", type=["csv", "xlsx", "xls"], key="u2a")
-    
-    if f_pre:
-        df_pre, err1 = load_and_prep(f_pre)
-        if df_pre is not None:
-            # Calcolo Segnali
-            calc_pre = df_pre.apply(lambda r: calc_hybrid(r, base_hfa, use_dyn, strat1, strat2), axis=1)
-            final_pre = pd.concat([df_pre, calc_pre], axis=1)
-            targets_pre = final_pre[final_pre['Signal'] != 'SKIP'].copy()
-            
-            if not targets_pre.empty:
-                st.success(f"✅ TROVATE {len(targets_pre)} PARTITE DA GIOCARE:")
-                
-                # Tabella Pre-Match (Solo previsioni)
-                cols_pre = ['Signal', 'datameci', 'league', 'txtechipa1', 'txtechipa2', 'Pick', 'Quota', 'EV', 'HFA']
-                
-                def color_strat(val):
-                    if 'STRATEGIA 1' in str(val): return 'background-color: #d4edda; color: #155724'
-                    if 'STRATEGIA 2' in str(val): return 'background-color: #cce5ff; color: #004085'
-                    return ''
-                    
-                st.dataframe(targets_pre[cols_pre].style.applymap(color_strat, subset=['Signal']), use_container_width=True)
-                
-                st.divider()
-                st.markdown("### 2. FASE POST-MATCH: Com'è andata?")
-                f_post = st.file_uploader("Carica File RISULTATI (Postmatch)", type=["csv", "xlsx", "xls"], key="u2b")
-                
-                if f_post:
-                    df_post, err2 = load_and_prep(f_post)
-                    if df_post is not None:
-                        # Incrocio
-                        res_map = df_post.set_index('MatchID')['Real_Res'].to_dict()
-                        
-                        def check_outcome(row):
-                            mid = row['MatchID']
-                            real = res_map.get(mid, '-')
-                            row['Real_Res'] = real
-                            
-                            if real == '-':
-                                row['Esito'] = 'Non Trovata'
-                                row['Dettaglio'] = '-'
-                                return row
-                            
-                            # Logica Esito Dettagliata
-                            if real == row['Pick_Code']:
-                                row['PNL'] = row['Quota'] - 1
-                                row['Esito'] = 'WIN'
-                                row['Dettaglio'] = '✅ Vinta'
-                            else:
-                                row['PNL'] = -1
-                                row['Esito'] = 'LOSS'
-                                if real == 'X':
-                                    row['Dettaglio'] = '❌ Pareggio (X)'
-                                elif row['Pick_Code'] == '1': # Avevo 1, uscito 2
-                                    row['Dettaglio'] = '❌ Vittoria Avversario' 
-                                elif row['Pick_Code'] == '2': # Avevo 2, uscito 1
-                                    row['Dettaglio'] = '❌ Vittoria Avversario'
-                            return row
-                        
-                        results_df = targets_pre.apply(check_outcome, axis=1)
-                        found_res = results_df[results_df['Esito'] != 'Non Trovata']
-                        
-                        st.write(f"Incrociate **{len(found_res)}** partite su {len(targets_pre)}.")
-                        if not found_res.empty:
-                            pnl_tot = found_res['PNL'].sum()
-                            st.metric("Profitto Reale", f"{pnl_tot:.2f} u", delta="Netto")
-                            
-                            def color_res(row):
-                                if row['Esito'] == 'WIN': return ['background-color: #d1e7dd'] * len(row)
-                                if row['Esito'] == 'LOSS': return ['background-color: #f8d7da'] * len(row)
-                                return [''] * len(row)
-                            
-                            cols_post = ['Signal', 'txtechipa1', 'txtechipa2', 'Pick', 'Quota', 'Real_Res', 'Dettaglio', 'PNL']
-                            st.dataframe(found_res[cols_post].style.apply(color_res, axis=1), use_container_width=True)
-                        else:
-                            st.warning("Nessuna corrispondenza trovata tra i due file.")
-            else:
-                st.warning("Nessuna partita soddisfa i criteri nel file Pre-match.")
+s1_min_ev, s1_max_ev = st.sidebar.slider("EV S1 (%)", -5.0, 30.0, (11.0, 19.5), key="e
