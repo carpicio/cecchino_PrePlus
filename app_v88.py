@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import sys
 import subprocess
+import io
 
 # --- AUTO-INSTALLAZIONE ---
 try:
@@ -14,12 +15,12 @@ except ImportError:
     except: pass
 
 # --- CONFIGURAZIONE ---
-st.set_page_config(page_title="Sniper V88 - Final Fix", page_icon="🎯", layout="wide")
-st.title("🎯 Sniper Bet V88 (Stable)")
+st.set_page_config(page_title="Sniper V88 - Export", page_icon="💾", layout="wide")
+st.title("💾 Sniper Bet V88 (Export Edition)")
 st.markdown("""
-**Modalità Step-by-Step:**
-1. Carica il PRE-MATCH per vedere i pronostici.
-2. Carica i RISULTATI per vedere com'è andata (con dettaglio sconfitte).
+**Versione Completa:**
+- Analisi Storica e Verifica Step-by-Step.
+- **Export Excel:** Scarica i risultati filtrati e verificati con un click.
 """)
 st.markdown("---")
 
@@ -125,10 +126,8 @@ def load_and_prep(file):
                 file.seek(0)
                 df = pd.read_csv(file, sep=';', encoding='latin1', on_bad_lines='skip', engine='python')
         elif filename.endswith(('.xls', '.xlsx')):
-            try:
-                df = pd.read_excel(file)
-            except Exception as e:
-                return None, f"Errore Excel: {e}"
+            try: df = pd.read_excel(file)
+            except Exception as e: return None, f"Errore Excel: {e}"
         
         if df is None: return None, "Formato non valido"
 
@@ -190,15 +189,13 @@ def load_and_prep(file):
         return df, None
     except Exception as e: return None, str(e)
 
-# --- HELPER SCONFITTE ---
-def analyze_losses(df_strat):
-    if df_strat.empty: return 0, 0, 0
-    losses = df_strat[df_strat['Esito'] == 'LOSS']
-    total_losses = len(losses)
-    if total_losses == 0: return 0, 0, 0
-    draws = len(losses[losses['Real_Res'] == 'X'])
-    direct_loss = total_losses - draws
-    return total_losses, draws, direct_loss
+# --- EXPORT EXCEL FUNCTION ---
+def to_excel(df):
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name='Sniper_Data')
+    processed_data = output.getvalue()
+    return processed_data
 
 # --- UI SIDEBAR ---
 st.sidebar.header("⚙️ Configurazione")
@@ -224,7 +221,7 @@ s2_min_ev, s2_max_ev = st.sidebar.slider("EV S2 (%)", -5.0, 30.0, (5.0, 15.0), k
 strat2 = {'active': s2_active, 'name': s2_name, 'pick': s2_pick, 'min_odd': s2_min_odd, 'max_odd': s2_max_odd, 'min_ev': s2_min_ev, 'max_ev': s2_max_ev}
 
 # --- TABS ---
-tab1, tab2 = st.tabs(["🧪 STUDIO STORICO (Single File)", "⚖️ VERIFICA (Step-by-Step)"])
+tab1, tab2 = st.tabs(["🧪 STUDIO STORICO", "⚖️ VERIFICA (Pre/Post)"])
 
 # --- TAB 1: STUDIO ---
 with tab1:
@@ -260,7 +257,6 @@ with tab1:
                     # --- ANALYTICS 1X2 ---
                     st.subheader("📊 Analisi Performance")
                     
-                    # 1. Distribuzione Segni Reali
                     res_counts = targets_s['Real_Res'].value_counts(normalize=True) * 100
                     c1, c2, c3 = st.columns(3)
                     c1.metric("Segno 1 Uscito", f"{res_counts.get('1', 0):.1f}%")
@@ -269,12 +265,10 @@ with tab1:
                     
                     st.markdown("---")
                     
-                    # 2. Performance Strategie
                     c_s1 = targets_s[targets_s['Signal'] == '✅ STRATEGIA 1']
                     c_s2 = targets_s[targets_s['Signal'] == '🔹 STRATEGIA 2']
                     
                     colA, colB = st.columns(2)
-                    
                     with colA:
                         st.info(f"**{s1_name}** ({len(c_s1)} bets)")
                         if not c_s1.empty:
@@ -282,7 +276,6 @@ with tab1:
                             roi1 = (pnl1 / len(c_s1)) * 100
                             st.write(f"Utile: **{pnl1:.2f} u**")
                             st.write(f"ROI: **{roi1:.2f}%**")
-                    
                     with colB:
                         st.info(f"**{s2_name}** ({len(c_s2)} bets)")
                         if not c_s2.empty:
@@ -291,7 +284,6 @@ with tab1:
                             st.write(f"Utile: **{pnl2:.2f} u**")
                             st.write(f"ROI: **{roi2:.2f}%**")
                     
-                    # Verdetto
                     best_profit = -9999
                     best_strat = "Nessuna"
                     if not c_s1.empty and c_s1['PNL'].sum() > best_profit:
@@ -304,11 +296,10 @@ with tab1:
                     if best_profit > 0:
                         st.success(f"🏆 La strategia migliore è **{best_strat}** con un utile di **{best_profit:.2f} u**")
                     else:
-                        st.error("⚠️ Nessuna strategia è in profitto con questi parametri.")
+                        st.error("⚠️ Nessuna strategia è in profitto.")
 
                     st.markdown("---")
                     
-                    # TABLE STYLE
                     def color_rows(row):
                         if row['Esito'] == 'WIN': return ['background-color: #28a745; color: white; font-weight: bold'] * len(row)
                         if row['Esito'] == 'LOSS': return ['background-color: #dc3545; color: white; font-weight: bold'] * len(row)
@@ -317,6 +308,11 @@ with tab1:
                     cols = ['Signal', 'txtechipa1', 'txtechipa2', 'Pick', 'Quota', 'Real_Res', 'Esito', 'Dettaglio', 'PNL']
                     final_c = [c for c in cols if c in targets_s.columns]
                     st.dataframe(targets_s[final_c].style.apply(color_rows, axis=1), use_container_width=True)
+                    
+                    # EXPORT
+                    excel_data = to_excel(targets_s[final_c])
+                    st.download_button(label="💾 Scarica Excel Storico", data=excel_data, file_name="sniper_storico.xlsx")
+                    
                 else:
                     st.info("Solo previsioni (senza risultati).")
                     st.dataframe(targets_s)
@@ -348,6 +344,10 @@ with tab2:
                     
                 st.dataframe(targets_pre[final_cols_pre].style.applymap(color_strat, subset=['Signal']), use_container_width=True)
                 
+                # EXPORT PRE
+                excel_pre = to_excel(targets_pre[final_cols_pre])
+                st.download_button(label="💾 Scarica Excel Pre-Match", data=excel_pre, file_name="sniper_prematch.xlsx")
+                
                 st.divider()
                 st.markdown("### 2. FASE POST-MATCH")
                 f_post = st.file_uploader("Carica File RISULTATI", type=["csv", "xlsx", "xls"], key="u2b")
@@ -374,8 +374,8 @@ with tab2:
                                 row['PNL'] = -1
                                 row['Esito'] = 'LOSS'
                                 if real == 'X': row['Dettaglio'] = '❌ Pareggio (X)'
-                                elif row['Pick_Code'] == '1': row['Dettaglio'] = '❌ Vittoria Avversario' 
-                                elif row['Pick_Code'] == '2': row['Dettaglio'] = '❌ Vittoria Avversario'
+                                elif row['Pick_Code'] == '1': row['Dettaglio'] = '❌ Vittoria Ospite (2)' 
+                                elif row['Pick_Code'] == '2': row['Dettaglio'] = '❌ Vittoria Casa (1)'
                             return row
                         
                         results_df = targets_pre.apply(check_outcome, axis=1)
@@ -391,24 +391,24 @@ with tab2:
                                 if row['Esito'] == 'LOSS': return ['background-color: #dc3545; color: white; font-weight: bold'] * len(row)
                                 return ['color: black'] * len(row)
                             
-                            # FIX DEFINITIVO: INCLUDO 'Esito' NELLA LISTA COLONNE
                             cols_post = ['Signal', 'txtechipa1', 'txtechipa2', 'Pick', 'Quota', 'Real_Res', 'Esito', 'Dettaglio', 'PNL']
                             final_cols_post = [c for c in cols_post if c in found_res.columns]
                             
                             st.dataframe(found_res[final_cols_post].style.apply(color_res, axis=1), use_container_width=True)
                             
                             # LOSS BREAKDOWN TAB 2
-                            st.markdown("#### 📉 Analisi Sconfitte (Perché abbiamo perso?)")
+                            st.markdown("#### 📉 Analisi Sconfitte")
                             losses = found_res[found_res['Esito'] == 'LOSS']
                             if not losses.empty:
                                 draws = len(losses[losses['Real_Res'] == 'X'])
                                 opp_wins = len(losses) - draws
-                                
                                 cA, cB = st.columns(2)
                                 cA.error(f"Pareggi (X): **{draws}**")
                                 cB.error(f"Vittorie Avversario: **{opp_wins}**")
-                            else:
-                                st.success("Nessuna sconfitta rilevata!")
+                            
+                            # EXPORT POST
+                            excel_post = to_excel(found_res[final_cols_post])
+                            st.download_button(label="💾 Scarica Excel Verifica", data=excel_post, file_name="sniper_verifica.xlsx")
                                 
                         else:
                             st.warning("Nessuna corrispondenza trovata tra i due file.")
