@@ -4,11 +4,11 @@ import numpy as np
 import io
 
 # --- CONFIGURAZIONE ---
-st.set_page_config(page_title="Sniper V93 - Corrected", page_icon="✅", layout="wide")
-st.title("✅ Sniper Bet V93 (Configurazione Corretta)")
+st.set_page_config(page_title="Sniper V94 - Independent", page_icon="🔓", layout="wide")
+st.title("🔓 Sniper Bet V94 (Calcolo Indipendente)")
 st.markdown("""
-**Fix Strategia 2:**
-Ora entrambe le strategie puntano di default sulla **SQUADRA OSPITE (2)**, dove si trova il valore reale.
+**Fix Logica:** Ora le strategie vengono valutate in modo indipendente. 
+Una partita può appartenere sia alla Strategia 1 che alla 2 (Match "Doppio").
 """)
 st.markdown("---")
 
@@ -32,15 +32,20 @@ def no_margin(o1, ox, o2):
 def calc_hybrid(row, base_hfa, dyn, strat1, strat2):
     res = {
         'Signal': 'SKIP', 'Strategia': '-', 'EV': 0, 'Pick': '-', 
-        'HFA': base_hfa, 'Quota': 0, 'Pick_Code': '-'
+        'HFA': base_hfa, 'Quota': 0, 'Pick_Code': '-', 
+        'Is_S1': False, 'Is_S2': False
     }
     try:
-        # Recupero dati
-        elo_h = row.get('elohomeo', 1500)
-        elo_a = row.get('eloawayo', 1500)
-        o1 = row.get('cotaa', 0)
-        ox = row.get('cotae', 0)
-        o2 = row.get('cotad', 0)
+        # Dati
+        def to_f(v):
+            try: return float(str(v).replace(',', '.'))
+            except: return 0.0
+
+        elo_h = to_f(row.get('elohomeo', 1500))
+        elo_a = to_f(row.get('eloawayo', 1500))
+        o1 = to_f(row.get('cotaa', 0))
+        ox = to_f(row.get('cotae', 0))
+        o2 = to_f(row.get('cotad', 0))
         
         # HFA
         curr_hfa = base_hfa
@@ -59,7 +64,7 @@ def calc_hybrid(row, base_hfa, dyn, strat1, strat2):
         f1, fx, f2 = no_margin(o1, ox, o2)
         ph, pa = get_probs(elo_h, elo_a, curr_hfa)
         
-        # EV Calc (Stima P reale = (1-Margin) * EloProb)
+        # EV Calc
         rem = 1 - fx
         prob_1 = rem * ph
         prob_2 = rem * pa
@@ -67,35 +72,47 @@ def calc_hybrid(row, base_hfa, dyn, strat1, strat2):
         ev1_perc = ((o1 * prob_1) - 1) * 100
         ev2_perc = ((o2 * prob_2) - 1) * 100
         
-        chosen = False
+        matches = []
         
-        # S1
+        # CHECK STRATEGIA 1
         if strat1['active']:
             ev = ev1_perc if strat1['pick'] == '1 (Casa)' else ev2_perc
             odd = o1 if strat1['pick'] == '1 (Casa)' else o2
             if (strat1['min_ev'] <= ev <= strat1['max_ev']) and \
                (strat1['min_odd'] <= odd <= strat1['max_odd']):
-                res['Signal'] = '✅ STRATEGIA 1'
-                res['Strategia'] = strat1['name']
+                res['Is_S1'] = True
+                matches.append("S1")
+                # Dati base presi dalla prima strategia valida
                 res['Pick'] = strat1['pick']
                 res['EV'] = round(ev, 2)
                 res['Quota'] = odd
                 res['Pick_Code'] = '1' if strat1['pick'] == '1 (Casa)' else '2'
-                chosen = True
 
-        # S2
-        if strat2['active'] and not chosen:
+        # CHECK STRATEGIA 2
+        if strat2['active']:
             ev = ev1_perc if strat2['pick'] == '1 (Casa)' else ev2_perc
             odd = o1 if strat2['pick'] == '1 (Casa)' else o2
             if (strat2['min_ev'] <= ev <= strat2['max_ev']) and \
                (strat2['min_odd'] <= odd <= strat2['max_odd']):
-                res['Signal'] = '🔹 STRATEGIA 2'
-                res['Strategia'] = strat2['name']
+                res['Is_S2'] = True
+                matches.append("S2")
+                # Se S2 è attiva, aggiorna i dati visualizzati (spesso è la più specifica)
                 res['Pick'] = strat2['pick']
                 res['EV'] = round(ev, 2)
                 res['Quota'] = odd
                 res['Pick_Code'] = '1' if strat2['pick'] == '1 (Casa)' else '2'
-                chosen = True
+
+        # COSTRUZIONE SEGNALE
+        if len(matches) > 0:
+            if "S1" in matches and "S2" in matches:
+                res['Signal'] = "✅ S1 + 🔹 S2"
+                res['Strategia'] = "DOUBLE MATCH"
+            elif "S1" in matches:
+                res['Signal'] = "✅ S1"
+                res['Strategia'] = strat1['name']
+            elif "S2" in matches:
+                res['Signal'] = "🔹 S2"
+                res['Strategia'] = strat2['name']
 
     except: pass
     return pd.Series(res)
@@ -191,7 +208,6 @@ st.sidebar.markdown("---")
 st.sidebar.header("🏹 STRATEGIA 1 (Verde)")
 s1_active = st.sidebar.checkbox("Attiva S1", True)
 s1_name = st.sidebar.text_input("Nome S1", "Cluster Ospite", key="n1")
-# FIX: Index=1 -> Default Ospite
 s1_pick = st.sidebar.selectbox("Punta su", ["1 (Casa)", "2 (Ospite)"], index=1, key="p1")
 s1_min_odd, s1_max_odd = st.sidebar.slider("Quote S1", 1.2, 5.0, (2.06, 2.80), key="o1")
 s1_min_ev, s1_max_ev = st.sidebar.slider("EV S1 (%)", -5.0, 30.0, (11.0, 19.5), key="e1")
@@ -201,7 +217,6 @@ st.sidebar.markdown("---")
 st.sidebar.header("🗡️ STRATEGIA 2 (Blu)")
 s2_active = st.sidebar.checkbox("Attiva S2", True)
 s2_name = st.sidebar.text_input("Nome S2", "Cluster Casa", key="n2")
-# FIX: Index=1 -> Default Ospite (Era 0 nel V92!)
 s2_pick = st.sidebar.selectbox("Punta su", ["1 (Casa)", "2 (Ospite)"], index=1, key="p2")
 s2_min_odd, s2_max_odd = st.sidebar.slider("Quote S2", 1.2, 5.0, (1.80, 2.20), key="o2")
 s2_min_ev, s2_max_ev = st.sidebar.slider("EV S2 (%)", -5.0, 30.0, (5.0, 15.0), key="e2")
@@ -214,7 +229,7 @@ dl_placeholder = st.sidebar.empty()
 # --- TABS ---
 tab1, tab2 = st.tabs(["🧪 STUDIO STORICO", "⚖️ VERIFICA (Pre/Post)"])
 
-# --- TAB 1 ---
+# --- TAB 1: STUDIO ---
 with tab1:
     st.info("Carica UN SOLO FILE (Quote + Risultati).")
     file_studio = st.file_uploader("File Storico", type=["csv", "xlsx", "xls"], key="u1")
@@ -248,8 +263,10 @@ with tab1:
                     c3.metric("2 (%)", f"{res_counts.get('2', 0):.1f}%")
                     
                     st.markdown("---")
-                    c_s1 = targets_s[targets_s['Signal'] == '✅ STRATEGIA 1']
-                    c_s2 = targets_s[targets_s['Signal'] == '🔹 STRATEGIA 2']
+                    
+                    # FILTRO INDIPENDENTE
+                    c_s1 = targets_s[targets_s['Is_S1'] == True]
+                    c_s2 = targets_s[targets_s['Is_S2'] == True]
                     
                     colA, colB = st.columns(2)
                     with colA:
@@ -297,8 +314,9 @@ with tab2:
                 final_cols_pre = [c for c in cols_pre if c in targets_pre.columns]
                 
                 def color_strat(val):
-                    if 'STRATEGIA 1' in str(val): return 'background-color: #d4edda; color: #155724'
-                    if 'STRATEGIA 2' in str(val): return 'background-color: #cce5ff; color: #004085'
+                    if '✅ S1' in str(val): return 'background-color: #d4edda; color: #155724'
+                    if '🔹 S2' in str(val): return 'background-color: #cce5ff; color: #004085'
+                    if '✅ S1 + 🔹 S2' in str(val): return 'background-color: #fff3cd; color: #856404; font-weight: bold'
                     return ''
                 st.dataframe(targets_pre[final_cols_pre].style.applymap(color_strat, subset=['Signal']), use_container_width=True)
                 
@@ -332,7 +350,7 @@ with tab2:
                         found_res = found_res[found_res['Esito'] != 'Non Trovata']
                         
                         if not found_res.empty:
-                            st.metric("Profitto Reale", f"{found_res['PNL'].sum():.2f} u")
+                            st.metric("Profitto Reale (Totale)", f"{found_res['PNL'].sum():.2f} u")
                             
                             def color_res(row):
                                 if row['Esito'] == 'WIN': return ['background-color: #28a745; color: white; font-weight: bold'] * len(row)
