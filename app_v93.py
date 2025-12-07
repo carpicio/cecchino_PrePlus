@@ -2,13 +2,13 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import io
-import re
 
 # --- CONFIGURAZIONE ---
-st.set_page_config(page_title="Sniper V92 - Force Decimal", page_icon="🔨", layout="wide")
-st.title("🔨 Sniper Bet V92 (Force Decimal Fix)")
+st.set_page_config(page_title="Sniper V93 - Corrected", page_icon="✅", layout="wide")
+st.title("✅ Sniper Bet V93 (Configurazione Corretta)")
 st.markdown("""
-**Fix Decimale:** Questa versione forza la conversione `2,50` -> `2.50` per evitare errori di lettura.
+**Fix Strategia 2:**
+Ora entrambe le strategie puntano di default sulla **SQUADRA OSPITE (2)**, dove si trova il valore reale.
 """)
 st.markdown("---")
 
@@ -35,12 +35,14 @@ def calc_hybrid(row, base_hfa, dyn, strat1, strat2):
         'HFA': base_hfa, 'Quota': 0, 'Pick_Code': '-'
     }
     try:
+        # Recupero dati
         elo_h = row.get('elohomeo', 1500)
         elo_a = row.get('eloawayo', 1500)
         o1 = row.get('cotaa', 0)
         ox = row.get('cotae', 0)
         o2 = row.get('cotad', 0)
         
+        # HFA
         curr_hfa = base_hfa
         if dyn:
             r1 = row.get('rank_h_home')
@@ -53,17 +55,17 @@ def calc_hybrid(row, base_hfa, dyn, strat1, strat2):
         
         res['HFA'] = int(curr_hfa)
         
+        # Probabilità
         f1, fx, f2 = no_margin(o1, ox, o2)
         ph, pa = get_probs(elo_h, elo_a, curr_hfa)
         
-        # Calcolo EV
-        # Stima P(1) reale = (1-ProbX_Book) * ProbEloHome
+        # EV Calc (Stima P reale = (1-Margin) * EloProb)
         rem = 1 - fx
-        real_p1 = rem * ph
-        real_p2 = rem * pa
+        prob_1 = rem * ph
+        prob_2 = rem * pa
         
-        ev1_perc = ((o1 * real_p1) - 1) * 100
-        ev2_perc = ((o2 * real_p2) - 1) * 100
+        ev1_perc = ((o1 * prob_1) - 1) * 100
+        ev2_perc = ((o2 * prob_2) - 1) * 100
         
         chosen = False
         
@@ -137,34 +139,28 @@ def load_and_prep(file):
             if c in ren: new[c] = ren[c]
         df = df.rename(columns=new)
         
-        # --- FIX DECIMALI BRUTALE ---
-        # Converte tutte le colonne numeriche sostituendo ',' con '.'
-        numeric_cols = ['cotaa', 'cotae', 'cotad', 'elohomeo', 'eloawayo', 'scor1', 'scor2']
-        for col in numeric_cols:
-            if col in df.columns:
-                # Forza stringa, rimpiazza virgola, converti a numero
-                df[col] = df[col].astype(str).str.replace(',', '.', regex=False)
-                df[col] = pd.to_numeric(df[col], errors='coerce')
+        # FIX DECIMALI
+        cols_num = ['cotaa', 'cotae', 'cotad', 'elohomeo', 'eloawayo', 'scor1', 'scor2']
+        for c in cols_num:
+            if c in df.columns:
+                df[c] = df[c].astype(str).str.replace(',', '.', regex=False)
+                df[c] = pd.to_numeric(df[c], errors='coerce')
 
         if 'cotaa' not in df.columns: return None, f"Colonne quote mancanti. Trovate: {list(df.columns)}"
         
         df = df.dropna(subset=['cotaa'])
 
-        # Estrazione Classifica
         if 'raw_place_1' in df.columns:
             df['rank_h_home'] = df['raw_place_1'].astype(str).str.extract(r'\((\d+)\)')[0]
             df['rank_h_home'] = df['rank_h_home'].fillna(df['raw_place_1'])
-            # Pulizia extra per rank se contiene virgole
             df['rank_h_home'] = df['rank_h_home'].astype(str).str.replace(',', '.', regex=False)
             df['rank_h_home'] = pd.to_numeric(df['rank_h_home'], errors='coerce')
-            
         if 'raw_place_2' in df.columns:
             df['rank_a_away'] = df['raw_place_2'].astype(str).str.extract(r'\((\d+)\)')[0]
             df['rank_a_away'] = df['rank_a_away'].fillna(df['raw_place_2'])
             df['rank_a_away'] = df['rank_a_away'].astype(str).str.replace(',', '.', regex=False)
             df['rank_a_away'] = pd.to_numeric(df['rank_a_away'], errors='coerce')
 
-        # Match ID
         if 'txtechipa1' in df.columns and 'txtechipa2' in df.columns:
             df['MatchID'] = df['txtechipa1'].astype(str).str.lower().str.replace(' ', '') + "-" + \
                             df['txtechipa2'].astype(str).str.lower().str.replace(' ', '')
@@ -195,6 +191,7 @@ st.sidebar.markdown("---")
 st.sidebar.header("🏹 STRATEGIA 1 (Verde)")
 s1_active = st.sidebar.checkbox("Attiva S1", True)
 s1_name = st.sidebar.text_input("Nome S1", "Cluster Ospite", key="n1")
+# FIX: Index=1 -> Default Ospite
 s1_pick = st.sidebar.selectbox("Punta su", ["1 (Casa)", "2 (Ospite)"], index=1, key="p1")
 s1_min_odd, s1_max_odd = st.sidebar.slider("Quote S1", 1.2, 5.0, (2.06, 2.80), key="o1")
 s1_min_ev, s1_max_ev = st.sidebar.slider("EV S1 (%)", -5.0, 30.0, (11.0, 19.5), key="e1")
@@ -204,7 +201,8 @@ st.sidebar.markdown("---")
 st.sidebar.header("🗡️ STRATEGIA 2 (Blu)")
 s2_active = st.sidebar.checkbox("Attiva S2", True)
 s2_name = st.sidebar.text_input("Nome S2", "Cluster Casa", key="n2")
-s2_pick = st.sidebar.selectbox("Punta su", ["1 (Casa)", "2 (Ospite)"], index=0, key="p2")
+# FIX: Index=1 -> Default Ospite (Era 0 nel V92!)
+s2_pick = st.sidebar.selectbox("Punta su", ["1 (Casa)", "2 (Ospite)"], index=1, key="p2")
 s2_min_odd, s2_max_odd = st.sidebar.slider("Quote S2", 1.2, 5.0, (1.80, 2.20), key="o2")
 s2_min_ev, s2_max_ev = st.sidebar.slider("EV S2 (%)", -5.0, 30.0, (5.0, 15.0), key="e2")
 strat2 = {'active': s2_active, 'name': s2_name, 'pick': s2_pick, 'min_odd': s2_min_odd, 'max_odd': s2_max_odd, 'min_ev': s2_min_ev, 'max_ev': s2_max_ev}
@@ -216,7 +214,7 @@ dl_placeholder = st.sidebar.empty()
 # --- TABS ---
 tab1, tab2 = st.tabs(["🧪 STUDIO STORICO", "⚖️ VERIFICA (Pre/Post)"])
 
-# --- TAB 1: STUDIO ---
+# --- TAB 1 ---
 with tab1:
     st.info("Carica UN SOLO FILE (Quote + Risultati).")
     file_studio = st.file_uploader("File Storico", type=["csv", "xlsx", "xls"], key="u1")
@@ -229,8 +227,7 @@ with tab1:
             targets_s = final_s[final_s['Signal'] != 'SKIP']
             
             if not targets_s.empty:
-                has_res = 'Real_Res' in targets_s.columns and targets_s['Real_Res'].ne('-').any()
-                if has_res:
+                if 'Real_Res' in targets_s.columns and targets_s['Real_Res'].ne('-').any():
                     def check_res(row):
                         if row['Real_Res'] == '-': return row
                         if row['Real_Res'] == row['Pick_Code']:
