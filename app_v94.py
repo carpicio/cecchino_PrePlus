@@ -4,11 +4,12 @@ import numpy as np
 import io
 
 # --- CONFIGURAZIONE ---
-st.set_page_config(page_title="Sniper V94 - Independent", page_icon="🔓", layout="wide")
-st.title("🔓 Sniper Bet V94 (Calcolo Indipendente)")
+st.set_page_config(page_title="Sniper V95 - Precision", page_icon="🎯", layout="wide")
+st.title("🎯 Sniper Bet V95 (Precision Control)")
 st.markdown("""
-**Fix Logica:** Ora le strategie vengono valutate in modo indipendente. 
-Una partita può appartenere sia alla Strategia 1 che alla 2 (Match "Doppio").
+**Nuova Interfaccia:**
+- **Box Manuali:** Inserisci le quote e l'EV con precisione millimetrica.
+- **Memoria:** I parametri partono già impostati sulle strategie vincenti.
 """)
 st.markdown("---")
 
@@ -36,7 +37,6 @@ def calc_hybrid(row, base_hfa, dyn, strat1, strat2):
         'Is_S1': False, 'Is_S2': False
     }
     try:
-        # Dati
         def to_f(v):
             try: return float(str(v).replace(',', '.'))
             except: return 0.0
@@ -47,7 +47,7 @@ def calc_hybrid(row, base_hfa, dyn, strat1, strat2):
         ox = to_f(row.get('cotae', 0))
         o2 = to_f(row.get('cotad', 0))
         
-        # HFA
+        # HFA Dinamico
         curr_hfa = base_hfa
         if dyn:
             r1 = row.get('rank_h_home')
@@ -60,7 +60,7 @@ def calc_hybrid(row, base_hfa, dyn, strat1, strat2):
         
         res['HFA'] = int(curr_hfa)
         
-        # Probabilità
+        # Calcoli
         f1, fx, f2 = no_margin(o1, ox, o2)
         ph, pa = get_probs(elo_h, elo_a, curr_hfa)
         
@@ -82,7 +82,6 @@ def calc_hybrid(row, base_hfa, dyn, strat1, strat2):
                (strat1['min_odd'] <= odd <= strat1['max_odd']):
                 res['Is_S1'] = True
                 matches.append("S1")
-                # Dati base presi dalla prima strategia valida
                 res['Pick'] = strat1['pick']
                 res['EV'] = round(ev, 2)
                 res['Quota'] = odd
@@ -96,7 +95,6 @@ def calc_hybrid(row, base_hfa, dyn, strat1, strat2):
                (strat2['min_odd'] <= odd <= strat2['max_odd']):
                 res['Is_S2'] = True
                 matches.append("S2")
-                # Se S2 è attiva, aggiorna i dati visualizzati (spesso è la più specifica)
                 res['Pick'] = strat2['pick']
                 res['EV'] = round(ev, 2)
                 res['Quota'] = odd
@@ -156,7 +154,6 @@ def load_and_prep(file):
             if c in ren: new[c] = ren[c]
         df = df.rename(columns=new)
         
-        # FIX DECIMALI
         cols_num = ['cotaa', 'cotae', 'cotad', 'elohomeo', 'eloawayo', 'scor1', 'scor2']
         for c in cols_num:
             if c in df.columns:
@@ -192,7 +189,6 @@ def load_and_prep(file):
         return df, None
     except Exception as e: return None, str(e)
 
-# --- EXPORT ---
 def to_excel(df):
     output = io.BytesIO()
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -201,26 +197,50 @@ def to_excel(df):
 
 # --- UI SIDEBAR ---
 st.sidebar.header("⚙️ Configurazione")
-base_hfa = st.sidebar.number_input("HFA Base", 90, step=10)
-use_dyn = st.sidebar.checkbox("Usa HFA Dinamico", True)
+base_hfa = st.sidebar.number_input("HFA Base", value=90, step=5)
+use_dyn = st.sidebar.checkbox("Usa HFA Dinamico", value=True)
 
 st.sidebar.markdown("---")
 st.sidebar.header("🏹 STRATEGIA 1 (Verde)")
 s1_active = st.sidebar.checkbox("Attiva S1", True)
 s1_name = st.sidebar.text_input("Nome S1", "Cluster Ospite", key="n1")
 s1_pick = st.sidebar.selectbox("Punta su", ["1 (Casa)", "2 (Ospite)"], index=1, key="p1")
-s1_min_odd, s1_max_odd = st.sidebar.slider("Quote S1", 1.2, 5.0, (2.06, 2.80), key="o1")
-s1_min_ev, s1_max_ev = st.sidebar.slider("EV S1 (%)", -5.0, 30.0, (11.0, 19.5), key="e1")
-strat1 = {'active': s1_active, 'name': s1_name, 'pick': s1_pick, 'min_odd': s1_min_odd, 'max_odd': s1_max_odd, 'min_ev': s1_min_ev, 'max_ev': s1_max_ev}
+
+# INPUT NUMERICI AL POSTO DEGLI SLIDER
+c1, c2 = st.sidebar.columns(2)
+s1_min_odd = c1.number_input("Quota Min S1", value=2.20, step=0.05, format="%.2f", key="o1_min")
+s1_max_odd = c2.number_input("Quota Max S1", value=2.80, step=0.05, format="%.2f", key="o1_max")
+
+c3, c4 = st.sidebar.columns(2)
+s1_min_ev = c3.number_input("EV Min S1 (%)", value=10.0, step=0.5, format="%.1f", key="e1_min")
+s1_max_ev = c4.number_input("EV Max S1 (%)", value=30.0, step=0.5, format="%.1f", key="e1_max")
+
+strat1 = {
+    'active': s1_active, 'name': s1_name, 'pick': s1_pick, 
+    'min_odd': s1_min_odd, 'max_odd': s1_max_odd, 
+    'min_ev': s1_min_ev, 'max_ev': s1_max_ev
+}
 
 st.sidebar.markdown("---")
 st.sidebar.header("🗡️ STRATEGIA 2 (Blu)")
 s2_active = st.sidebar.checkbox("Attiva S2", True)
 s2_name = st.sidebar.text_input("Nome S2", "Cluster Casa", key="n2")
 s2_pick = st.sidebar.selectbox("Punta su", ["1 (Casa)", "2 (Ospite)"], index=1, key="p2")
-s2_min_odd, s2_max_odd = st.sidebar.slider("Quote S2", 1.2, 5.0, (1.80, 2.20), key="o2")
-s2_min_ev, s2_max_ev = st.sidebar.slider("EV S2 (%)", -5.0, 30.0, (5.0, 15.0), key="e2")
-strat2 = {'active': s2_active, 'name': s2_name, 'pick': s2_pick, 'min_odd': s2_min_odd, 'max_odd': s2_max_odd, 'min_ev': s2_min_ev, 'max_ev': s2_max_ev}
+
+# INPUT NUMERICI S2
+c5, c6 = st.sidebar.columns(2)
+s2_min_odd = c5.number_input("Quota Min S2", value=2.50, step=0.05, format="%.2f", key="o2_min")
+s2_max_odd = c6.number_input("Quota Max S2", value=2.80, step=0.05, format="%.2f", key="o2_max")
+
+c7, c8 = st.sidebar.columns(2)
+s2_min_ev = c7.number_input("EV Min S2 (%)", value=12.0, step=0.5, format="%.1f", key="e2_min")
+s2_max_ev = c8.number_input("EV Max S2 (%)", value=30.0, step=0.5, format="%.1f", key="e2_max")
+
+strat2 = {
+    'active': s2_active, 'name': s2_name, 'pick': s2_pick, 
+    'min_odd': s2_min_odd, 'max_odd': s2_max_odd, 
+    'min_ev': s2_min_ev, 'max_ev': s2_max_ev
+}
 
 st.sidebar.markdown("---")
 st.sidebar.header("📥 DOWNLOAD")
@@ -350,7 +370,7 @@ with tab2:
                         found_res = found_res[found_res['Esito'] != 'Non Trovata']
                         
                         if not found_res.empty:
-                            st.metric("Profitto Reale (Totale)", f"{found_res['PNL'].sum():.2f} u")
+                            st.metric("Profitto Reale", f"{found_res['PNL'].sum():.2f} u")
                             
                             def color_res(row):
                                 if row['Esito'] == 'WIN': return ['background-color: #28a745; color: white; font-weight: bold'] * len(row)
