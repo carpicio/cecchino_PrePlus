@@ -14,8 +14,13 @@ except ImportError:
     except: pass
 
 # --- CONFIGURAZIONE ---
-st.set_page_config(page_title="Sniper V85 - Stable", page_icon="🛡️", layout="wide")
-st.title("🛡️ Sniper Bet V85 (Final Stable)")
+st.set_page_config(page_title="Sniper V86 - Final Fix", page_icon="🎯", layout="wide")
+st.title("🎯 Sniper Bet V86 (Stable)")
+st.markdown("""
+**Modalità Step-by-Step:**
+1. Carica il PRE-MATCH per vedere i pronostici.
+2. Carica i RISULTATI per vedere com'è andata (con dettaglio sconfitte).
+""")
 st.markdown("---")
 
 # --- CORE LOGIC ---
@@ -123,7 +128,7 @@ def load_and_prep(file):
             try:
                 df = pd.read_excel(file)
             except Exception as e:
-                return None, f"Errore Excel: {e}. Prova a salvare come CSV."
+                return None, f"Errore Excel: {e}"
         
         if df is None: return None, "Formato non valido"
 
@@ -151,9 +156,7 @@ def load_and_prep(file):
             if c.lower() in ren: new[c] = ren[c.lower()]
         df = df.rename(columns=new)
         
-        # DEBUG COLONNE
-        if 'cotaa' not in df.columns: 
-            return None, f"⚠️ ERRORE: Non trovo le quote (1, X, 2). Ecco le colonne che vedo nel tuo file: {list(df.columns)}"
+        if 'cotaa' not in df.columns: return None, f"Colonne quote mancanti. Trovate: {list(df.columns)}"
         
         df = df.dropna(subset=['cotaa'])
 
@@ -187,6 +190,16 @@ def load_and_prep(file):
         return df, None
     except Exception as e: return None, str(e)
 
+# --- HELPER SCONFITTE ---
+def analyze_losses(df_strat):
+    if df_strat.empty: return 0, 0, 0
+    losses = df_strat[df_strat['Esito'] == 'LOSS']
+    total_losses = len(losses)
+    if total_losses == 0: return 0, 0, 0
+    draws = len(losses[losses['Real_Res'] == 'X'])
+    direct_loss = total_losses - draws
+    return total_losses, draws, direct_loss
+
 # --- UI SIDEBAR ---
 st.sidebar.header("⚙️ Configurazione")
 base_hfa = st.sidebar.number_input("HFA Base", 90, step=10)
@@ -197,53 +210,25 @@ st.sidebar.header("🏹 STRATEGIA 1 (Verde)")
 s1_active = st.sidebar.checkbox("Attiva S1", True)
 s1_name = st.sidebar.text_input("Nome S1", "Cluster Ospite", key="n1")
 s1_pick = st.sidebar.selectbox("Punta su", ["1 (Casa)", "2 (Ospite)"], index=1, key="p1")
-# FORMATTAZIONE SICURA PER EVITARE ERRORI DI COPIA
-s1_min_odd, s1_max_odd = st.sidebar.slider(
-    "Quote S1", 1.2, 5.0, (2.06, 2.80), key="o1"
-)
-s1_min_ev, s1_max_ev = st.sidebar.slider(
-    "EV S1 (%)", -5.0, 30.0, (11.0, 19.5), key="e1"
-)
-
-strat1 = {
-    'active': s1_active, 
-    'name': s1_name, 
-    'pick': s1_pick, 
-    'min_odd': s1_min_odd, 
-    'max_odd': s1_max_odd, 
-    'min_ev': s1_min_ev, 
-    'max_ev': s1_max_ev
-}
+s1_min_odd, s1_max_odd = st.sidebar.slider("Quote S1", 1.2, 5.0, (2.06, 2.80), key="o1")
+s1_min_ev, s1_max_ev = st.sidebar.slider("EV S1 (%)", -5.0, 30.0, (11.0, 19.5), key="e1")
+strat1 = {'active': s1_active, 'name': s1_name, 'pick': s1_pick, 'min_odd': s1_min_odd, 'max_odd': s1_max_odd, 'min_ev': s1_min_ev, 'max_ev': s1_max_ev}
 
 st.sidebar.markdown("---")
 st.sidebar.header("🗡️ STRATEGIA 2 (Blu)")
 s2_active = st.sidebar.checkbox("Attiva S2", True)
 s2_name = st.sidebar.text_input("Nome S2", "Cluster Casa", key="n2")
 s2_pick = st.sidebar.selectbox("Punta su", ["1 (Casa)", "2 (Ospite)"], index=0, key="p2")
-# FORMATTAZIONE SICURA
-s2_min_odd, s2_max_odd = st.sidebar.slider(
-    "Quote S2", 1.2, 5.0, (1.80, 2.20), key="o2"
-)
-s2_min_ev, s2_max_ev = st.sidebar.slider(
-    "EV S2 (%)", -5.0, 30.0, (5.0, 15.0), key="e2"
-)
-
-strat2 = {
-    'active': s2_active, 
-    'name': s2_name, 
-    'pick': s2_pick, 
-    'min_odd': s2_min_odd, 
-    'max_odd': s2_max_odd, 
-    'min_ev': s2_min_ev, 
-    'max_ev': s2_max_ev
-}
+s2_min_odd, s2_max_odd = st.sidebar.slider("Quote S2", 1.2, 5.0, (1.80, 2.20), key="o2")
+s2_min_ev, s2_max_ev = st.sidebar.slider("EV S2 (%)", -5.0, 30.0, (5.0, 15.0), key="e2")
+strat2 = {'active': s2_active, 'name': s2_name, 'pick': s2_pick, 'min_odd': s2_min_odd, 'max_odd': s2_max_odd, 'min_ev': s2_min_ev, 'max_ev': s2_max_ev}
 
 # --- TABS ---
 tab1, tab2 = st.tabs(["🧪 STUDIO STORICO (Single File)", "⚖️ VERIFICA (Step-by-Step)"])
 
 # --- TAB 1: STUDIO ---
 with tab1:
-    st.info("Carica UN SOLO FILE che contiene già i risultati per studiare le strategie.")
+    st.info("Carica UN SOLO FILE che contiene già i risultati.")
     file_studio = st.file_uploader("Carica File Storico", type=["csv", "xlsx", "xls"], key="u1")
     
     if file_studio:
@@ -254,10 +239,8 @@ with tab1:
             targets_s = final_s[final_s['Signal'] != 'SKIP']
             
             if not targets_s.empty:
-                st.success(f"Trovate {len(targets_s)} partite.")
-                
+                # Applica esito se c'è risultato
                 if 'Real_Res' in targets_s.columns and targets_s['Real_Res'].ne('-').any():
-                    # Applica esito
                     def check_res(row):
                         if row['Real_Res'] == '-': return row
                         if row['Real_Res'] == row['Pick_Code']:
@@ -280,19 +263,20 @@ with tab1:
                         if row['Esito'] == 'LOSS': return ['background-color: #f8d7da; color: #842029'] * len(row)
                         return [''] * len(row)
                     
+                    # FIX: INCLUDO 'Esito' e 'Real_Res' NELLA LISTA
                     cols = ['Signal', 'txtechipa1', 'txtechipa2', 'Pick', 'Quota', 'Real_Res', 'Esito', 'Dettaglio', 'PNL']
                     final_c = [c for c in cols if c in targets_s.columns]
                     st.dataframe(targets_s[final_c].style.apply(color_rows, axis=1), use_container_width=True)
                 else:
-                    st.info("Il file non contiene risultati, mostro solo i segnali.")
+                    st.info("Solo previsioni.")
                     st.dataframe(targets_s)
         else:
             st.error(err)
 
 # --- TAB 2: VERIFICA ---
 with tab2:
-    st.markdown("### 1. FASE PRE-MATCH: Cosa giochiamo?")
-    f_pre = st.file_uploader("Carica File QUOTE (Prematch)", type=["csv", "xlsx", "xls"], key="u2a")
+    st.markdown("### 1. FASE PRE-MATCH")
+    f_pre = st.file_uploader("Carica File QUOTE", type=["csv", "xlsx", "xls"], key="u2a")
     
     if f_pre:
         df_pre, err1 = load_and_prep(f_pre)
@@ -302,7 +286,7 @@ with tab2:
             targets_pre = final_pre[final_pre['Signal'] != 'SKIP'].copy()
             
             if not targets_pre.empty:
-                st.success(f"✅ TROVATE {len(targets_pre)} PARTITE DA GIOCARE:")
+                st.success(f"✅ TROVATE {len(targets_pre)} PARTITE:")
                 
                 cols_pre = ['Signal', 'datameci', 'league', 'txtechipa1', 'txtechipa2', 'Pick', 'Quota', 'EV', 'HFA']
                 final_cols_pre = [c for c in cols_pre if c in targets_pre.columns]
@@ -315,8 +299,8 @@ with tab2:
                 st.dataframe(targets_pre[final_cols_pre].style.applymap(color_strat, subset=['Signal']), use_container_width=True)
                 
                 st.divider()
-                st.markdown("### 2. FASE POST-MATCH: Com'è andata?")
-                f_post = st.file_uploader("Carica File RISULTATI (Postmatch)", type=["csv", "xlsx", "xls"], key="u2b")
+                st.markdown("### 2. FASE POST-MATCH")
+                f_post = st.file_uploader("Carica File RISULTATI", type=["csv", "xlsx", "xls"], key="u2b")
                 
                 if f_post:
                     df_post, err2 = load_and_prep(f_post)
@@ -357,7 +341,8 @@ with tab2:
                                 if row['Esito'] == 'LOSS': return ['background-color: #f8d7da'] * len(row)
                                 return [''] * len(row)
                             
-                            cols_post = ['Signal', 'txtechipa1', 'txtechipa2', 'Pick', 'Quota', 'Real_Res', 'Dettaglio', 'PNL']
+                            # FIX DEFINITIVO: INCLUDO 'Esito' NELLA LISTA COLONNE
+                            cols_post = ['Signal', 'txtechipa1', 'txtechipa2', 'Pick', 'Quota', 'Real_Res', 'Esito', 'Dettaglio', 'PNL']
                             final_cols_post = [c for c in cols_post if c in found_res.columns]
                             
                             st.dataframe(found_res[final_cols_post].style.apply(color_res, axis=1), use_container_width=True)
